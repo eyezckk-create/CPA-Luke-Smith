@@ -1,0 +1,7 @@
+const enc=new TextEncoder();
+function b64(bytes:ArrayBuffer|Uint8Array){return Buffer.from(bytes instanceof Uint8Array?bytes:new Uint8Array(bytes)).toString('base64url')}
+function unb64(s:string){return new Uint8Array(Buffer.from(s,'base64url'))}
+export async function hashPassword(password:string,salt?:Uint8Array){const s=salt??crypto.getRandomValues(new Uint8Array(16));const key=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:s,iterations:210000,hash:'SHA-256'},key,256);return `${b64(s)}.${b64(bits)}`}
+export async function verifyPassword(password:string,stored:string){try{const [salt,digest]=stored.split('.');if(!salt||!digest)return false;return (await hashPassword(password,unb64(salt)))===stored}catch{return false}}
+export async function signSession(value:string){const secret=process.env.SESSION_SECRET??'';const key=await crypto.subtle.importKey('raw',enc.encode(secret),'HMAC',false,['sign']);const sig=await crypto.subtle.sign('HMAC',key,enc.encode(value));return `${value}.${b64(sig)}`}
+export async function verifySession(token:string){try{const secret=process.env.SESSION_SECRET??'';const [value,sig]=token.split('.');if(!secret||!value||!sig)return false;const key=await crypto.subtle.importKey('raw',enc.encode(secret),'HMAC',false,['verify']);return await crypto.subtle.verify('HMAC',key,unb64(sig),enc.encode(value))}catch{return false}}
